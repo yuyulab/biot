@@ -15,65 +15,74 @@ import org.fusesource.mqtt.client.FutureConnection;
 import org.fusesource.mqtt.client.MQTT;
 import org.fusesource.mqtt.client.QoS;
 
-import java.util.LinkedList;
+import java.util.HashMap;
 
 
 public class MqSend {
 
 
-    public static void main(String []args) throws Exception {
+    final private static int messages = 10000;
+    final private static int size = 256;
 
-        String user = env("ACTIVEMQ_USER", "admin");
-        String password = env("ACTIVEMQ_PASSWORD", "password");
-        String host = env("ACTIVEMQ_HOST", "localhost");
-        int port = Integer.parseInt(env("ACTIVEMQ_PORT", "1883"));
-        final String destination = arg(args, 0, "/topic/event");
+    private String user = "admin";
+    private String password = "password";
+    private String host = "localhost";
+    private Integer port =1883;
 
-        int messages = 10000;
-        int size = 256;
+    private MQTT mqtt = new MQTT();
+    private String destination;
 
-        String DATA = "abcdefghijklmnopqrstuvwxyz";
-        String body = "";
-        for( int i=0; i < size; i ++) {
-            body += DATA.charAt(i%DATA.length());
+    private final HashMap<String,Future<Void>> queueMap = new HashMap<String, Future<Void>>(32);
+
+    public MqSend(String user, String password, String host, Integer port, String destination){
+
+        if(user!=null){
+            this.user = user;
         }
-        Buffer msg = new AsciiBuffer(body);
+        if(password!=null){
+            this.password = password;
+        }
+        if(host!=null){
+            this.host = host;
+        }
+        if(port!=null){
+            this.port = port;
+        }
 
-        MQTT mqtt = new MQTT();
-        mqtt.setHost(host, port);
-        mqtt.setUserName(user);
-        mqtt.setPassword(password);
+        if(destination==null){
+            System.out.println("could not destination is null");
+            return;
+        }else{
+            this.destination = destination;
+        }
 
+        try{
+            mqtt.setUserName(this.user);
+            mqtt.setPassword(this.password);
+            mqtt.setHost(this.host, this.port);
+
+        }catch (Exception e){
+            System.out.println(e.getMessage());
+        }
+
+    }
+
+
+
+    public void send(String str){
+
+        Buffer msg = new AsciiBuffer(str);
         FutureConnection connection = mqtt.futureConnection();
-        connection.connect().await();
-
-        final LinkedList<Future<Void>> queue = new LinkedList<Future<Void>>();
-        UTF8Buffer topic = new UTF8Buffer(destination);
-        for( int i=1; i <= messages; i ++) {
-
-            // Send the publish without waiting for it to complete. This allows us
-            // to send multiple message without blocking..
-            queue.add(connection.publish(topic, msg, QoS.AT_LEAST_ONCE, false));
-
-            // Eventually we start waiting for old publish futures to complete
-            // so that we don't create a large in memory buffer of outgoing message.s
-            if( queue.size() >= 1000 ) {
-                queue.removeFirst().await();
-            }
-
-            if( i % 1000 == 0 ) {
-                System.out.println(String.format("Sent %d messages.", i));
-            }
+        UTF8Buffer top = new UTF8Buffer(destination);
+        try {
+            connection.connect().await();
+            System.out.println(str);
+            connection.publish(top, msg, QoS.AT_LEAST_ONCE, false).await();
+            connection.disconnect().await();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
-        queue.add(connection.publish(topic, new AsciiBuffer("SHUTDOWN"), QoS.AT_LEAST_ONCE, false));
-        while( !queue.isEmpty() ) {
-            queue.removeFirst().await();
-        }
-
-        connection.disconnect().await();
-
-        System.exit(0);
     }
 
     private static String env(String key, String defaultValue) {

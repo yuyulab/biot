@@ -5,7 +5,6 @@ import org.fusesource.hawtbuf.UTF8Buffer;
 import org.fusesource.mqtt.client.*;
 
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 
 /**
  * @author : guiheng.wang
@@ -15,43 +14,62 @@ import java.util.ArrayList;
 public class MqListener {
 
 
-    ArrayList<Topic> destinationList = new ArrayList<Topic>(32);
+//    ArrayList<Topic> destinationList = new ArrayList<Topic>(32);
 
 
-    static private String user;
-    static private String password;
-    static private String host;
-    static private int port;
+    private String user = "admin";
+    private String password = "password";
+    private String host = "localhost";
+    private int port = 1883;
+    private MQTT mqtt = new MQTT();
+    private long count = 0;
+    private String destination;
+    private CallbackConnection connection = mqtt.callbackConnection();
 
-    MqListener(String user, String password, String host, int port) throws InterruptedException {
+    MqListener(String user, String password, String host, Integer port,String destination) throws InterruptedException {
 
-        MqListener.user = user;
-        MqListener.password = password;
-        MqListener.host = host;
-        MqListener.port = port;
+        if(user!=null){
+            this.user = user;
+        }
+        if(password!=null){
+            this.password = password;
+        }
+        if(host!=null){
+            this.host = host;
+        }
+        if(port!=null){
+            this.port = port;
+        }
+        if(destination==null){
+            System.out.println("could not destination is null");
+            System.exit(1);
+        }
+        this.destination = destination;
 
-        MQTT mqtt = new MQTT();
-        mqtt.setUserName(user);
-        mqtt.setPassword(password);
         try {
-            mqtt.setHost(host, port);
+            mqtt.setUserName(this.user);
+            mqtt.setPassword(this.password);
+            mqtt.setHost(this.host, this.port);
         } catch (URISyntaxException e) {
             e.printStackTrace();
         }
 
+    }
 
-
-        final CallbackConnection connection = mqtt.callbackConnection();
+    public void start() {
         connection.listener(new org.fusesource.mqtt.client.Listener() {
-            long count = 0;
-            long start = System.currentTimeMillis();
 
+            @Override
             public void onConnected() {
+                System.out.println("连接成功");
             }
 
+            @Override
             public void onDisconnected() {
+                System.out.println("连接失败");
             }
 
+            @Override
             public void onFailure(Throwable value) {
                 value.printStackTrace();
                 System.exit(-2);
@@ -59,42 +77,24 @@ public class MqListener {
 
             public void onPublish(UTF8Buffer topic, Buffer msg, Runnable ack) {
                 String body = msg.utf8().toString();
-                if ("SHUTDOWN".equals(body)) {
-                    long diff = System.currentTimeMillis() - start;
-                    System.out.println(String.format("Received %d in %.2f seconds", count, (1.0 * diff / 1000.0)));
-                    connection.disconnect(new Callback<Void>() {
-                        @Override
-                        public void onSuccess(Void value) {
-                            System.exit(0);
-                        }
-
-                        @Override
-                        public void onFailure(Throwable value) {
-                            value.printStackTrace();
-                            System.exit(-2);
-                        }
-                    });
-                } else {
-                    if (count == 0) {
-                        start = System.currentTimeMillis();
-                    }
-                    if (count % 1000 == 0) {
-                        System.out.println(String.format("Received %d messages.", count));
-                    }
-                    count++;
-                }
+                System.out.println(body);
                 ack.run();
             }
         });
+
+        final Topic topic = new Topic(this.destination, QoS.AT_LEAST_ONCE);
         connection.connect(new Callback<Void>() {
             @Override
             public void onSuccess(Void value) {
-                Topic[] topics = {new Topic("/top", QoS.AT_LEAST_ONCE)};
+                Topic[] topics = {topic};
 
                 connection.subscribe(topics, new Callback<byte[]>() {
+                    @Override
                     public void onSuccess(byte[] qoses) {
+                        System.out.println("订阅成功");
                     }
 
+                    @Override
                     public void onFailure(Throwable value) {
                         value.printStackTrace();
                         System.exit(-2);
@@ -108,24 +108,19 @@ public class MqListener {
                 System.exit(-2);
             }
         });
-
-        // Wait forever..
         synchronized (Listener.class) {
-            while (true)
-                Listener.class.wait();
+            while(true)
+                try {
+                    Listener.class.wait();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
         }
     }
 
-    public void start() {
-
-    }
-
     public static void main(String[] args) throws Exception {
-
-        String user = env("ACTIVEMQ_USER", "admin");
-        String password = env("ACTIVEMQ_PASSWORD", "password");
-        String host = env("ACTIVEMQ_HOST", "localhost");
-        int port = Integer.parseInt(env("ACTIVEMQ_PORT", "1883"));
+        MqListener mqListener = new MqListener(null,null,null,null,"start_open_close");
+        mqListener.start();
     }
 
     private static String env(String key, String defaultValue) {
