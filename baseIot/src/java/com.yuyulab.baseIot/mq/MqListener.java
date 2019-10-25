@@ -1,5 +1,9 @@
 package com.yuyulab.baseIot.mq;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.parser.ParserConfig;
+import com.yuyulab.baseIot.base.BaseObjectS;
+import com.yuyulab.baseIot.base.BaseSwitch;
 import org.fusesource.hawtbuf.Buffer;
 import org.fusesource.hawtbuf.UTF8Buffer;
 import org.fusesource.mqtt.client.*;
@@ -56,7 +60,12 @@ public class MqListener {
 
     }
 
+    /**
+     *
+     */
     public void start() {
+
+        ParserConfig.getGlobalInstance().setAutoTypeSupport(true);
         connection.listener(new org.fusesource.mqtt.client.Listener() {
 
             @Override
@@ -76,8 +85,20 @@ public class MqListener {
             }
 
             public void onPublish(UTF8Buffer topic, Buffer msg, Runnable ack) {
+
                 String body = msg.utf8().toString();
-                System.out.println(body);
+                BaseObjectS baseObjectS = JSON.parseObject(body,BaseObjectS.class);
+                String classPath = baseObjectS.getClassPath();
+
+                BaseSwitch baseSwitch = (BaseSwitch)baseObjectS.getO();
+                String  oClassPath = BaseSwitch.class.getName();
+                if(classPath.equals(oClassPath)){
+
+                    System.out.println(JSON.toJSONString(baseSwitch));
+                }else{
+                    System.out.println("对象转换失败");
+                }
+
                 ack.run();
             }
         });
@@ -116,24 +137,5 @@ public class MqListener {
                     e.printStackTrace();
                 }
         }
-    }
-
-    public static void main(String[] args) throws Exception {
-        MqListener mqListener = new MqListener(null,null,null,null,"start_open_close");
-        mqListener.start();
-    }
-
-    private static String env(String key, String defaultValue) {
-        String rc = System.getenv(key);
-        if (rc == null)
-            return defaultValue;
-        return rc;
-    }
-
-    private static String arg(String[] args, int index, String defaultValue) {
-        if (index < args.length)
-            return args[index];
-        else
-            return defaultValue;
     }
 }

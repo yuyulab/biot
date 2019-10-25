@@ -7,7 +7,10 @@ package com.yuyulab.baseIot.mq;
  */
 
 
-import org.fusesource.hawtbuf.AsciiBuffer;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.serializer.SerializerFeature;
+import com.yuyulab.baseIot.base.BaseObjectS;
+import com.yuyulab.baseIot.base.VersionUtil;
 import org.fusesource.hawtbuf.Buffer;
 import org.fusesource.hawtbuf.UTF8Buffer;
 import org.fusesource.mqtt.client.Future;
@@ -15,6 +18,8 @@ import org.fusesource.mqtt.client.FutureConnection;
 import org.fusesource.mqtt.client.MQTT;
 import org.fusesource.mqtt.client.QoS;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 
 
@@ -69,9 +74,28 @@ public class MqSend {
 
 
 
+    public void send(Object o){
+
+        BaseObjectS baseObjectS = new BaseObjectS();
+
+        Date date =new Date();
+        SimpleDateFormat simdate=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        String dateStr=simdate.format(date);
+        date.getTime();
+        String className = o.getClass().getName();
+        baseObjectS.setTime(date.getTime());
+        baseObjectS.setTimeS(dateStr);
+        baseObjectS.setClassPath(className);
+        baseObjectS.setO(o);
+        baseObjectS.setHashCode(o.hashCode());
+        baseObjectS.setVersion(VersionUtil.getVersion());
+        baseObjectS.setVersionNum(VersionUtil.version);
+        send(JSON.toJSONString(baseObjectS, SerializerFeature.WriteClassName));
+    }
+
     public void send(String str){
 
-        Buffer msg = new AsciiBuffer(str);
+        Buffer msg = new UTF8Buffer(str);
         FutureConnection connection = mqtt.futureConnection();
         UTF8Buffer top = new UTF8Buffer(destination);
         try {
@@ -85,17 +109,4 @@ public class MqSend {
 
     }
 
-    private static String env(String key, String defaultValue) {
-        String rc = System.getenv(key);
-        if( rc== null )
-            return defaultValue;
-        return rc;
-    }
-
-    private static String arg(String []args, int index, String defaultValue) {
-        if( index < args.length )
-            return args[index];
-        else
-            return defaultValue;
-    }
 }
